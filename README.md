@@ -1,1 +1,37 @@
-# LoveStory
+# 我们的小日子 · GitHub Pages 版
+
+纯静态网页，无需安装依赖。文件须一起上传：index.html、style.css、app.js、bgm.wav。
+
+## 部署到独立仓库（推荐）
+1. GitHub 新建 Public 仓库，名称例如 our-little-days。
+2. 解压本包，将文件上传到仓库根目录。不要直接上传 ZIP，也不要多套一层目录。
+3. Settings → Pages → Build and deployment → Source 选择 Deploy from a branch。
+4. Branch 选择 main，文件夹选择 /(root)，点击 Save。
+5. 等待发布完成，从 Settings → Pages → Visit site 打开。
+
+项目页面地址形式为 https://你的用户名.github.io/our-little-days/。
+本包使用相对路径，支持项目子目录。
+
+## 放进现有个人网站
+若使用现有学术网站仓库，可新建 love 目录，把本包文件放入该目录。
+通过 https://你的用户名.github.io/love/ 访问。
+不要覆盖学术网站根目录的 index.html。
+
+## 背景音乐
+点击网页右上角音乐按钮播放/暂停。浏览器通常禁止未经点击的有声自动播放。
+默认音乐为本项目合成的轻柔旋律，无外部音乐服务依赖。
+临时播放自己的音乐：页面底部“选择自己的 BGM”。刷新后恢复默认。
+永久替换：上传有权使用的背景音乐，例如 bgm.mp3，再把 app.js 中 audio.src='bgm.wav' 改为 audio.src='bgm.mp3'。
+
+## 内容与数据
+- app.js 的 demos：初始示例回忆；可修改标题、日期、地点、文字。
+- app.js 的 places：示例地点与说明。
+- index.html：网页标题、首页文字、待办事项等。
+- style.css：颜色、排版、手机布局。
+- 新增回忆支持照片，照片会在浏览器中缩放后保存。
+- 页面内新增的记录、纪念日与勾选状态仅存在当前浏览器，不会写回 GitHub，也不会同步到另一部手机。
+- 页脚提供 JSON 导出和导入，建议定期备份。
+- 如需所有访客都能看见的固定照片，需放入仓库，并修改网页初始内容；当前新增功能用于本机手帐。
+- GitHub Pages 通常公开可访问，写入仓库的真实照片和文字应按公开内容处理。
+
+没有修改你原有的学术网站；此包是独立情侣网页源码。
