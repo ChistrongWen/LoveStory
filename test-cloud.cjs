@@ -1,0 +1,28 @@
+// Run with node --test test-cloud.cjs. No real credentials or network required.
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const vm=require('node:vm');
+const fs=require('node:fs');
+const {webcrypto}=require('node:crypto');
+function setup(configured=true) {
+  const nodes={},messages=[],records=[],objects=new Set();let authCallback,failInsert=false,member=true;
+  const node=id=>nodes[id]??=( {textContent:'',hidden:false,disabled:false,open:false,onclick:()=>{},onsubmit:()=>{},reset(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node(id+'-button');},addEventListener(){}});
+  const user={user:{id:'user-one',email:'one@example.com'}};
+  function query(table){let filters=[],op='select',payload=null,range=null;
+    const q={select(){return q},eq(k,v){filters.push([k,v]);return q},order(){return q},range(a,b){range=[a,b];return q},maybeSingle(){return q.then(x=>({...x,data:x.data?.[0]||null}))},insert(x){op='insert';payload=x;return q},delete(){op='delete';return q},then(resolve,reject){
+      let result;
+      if(table==='love_members')result={data:member?[{journal_id:'j'}]:[],error:null};
+      else if(op==='insert'){if(failInsert)result={error:{message:'offline'}};else {records.push({...payload,created_at:'now'});result={error:null};}}
+      else {let match=records.filter(r=>filters.every(([k,v])=>r[k]===v));if(op==='delete'){for(const r of match)records.splice(records.indexOf(r),1);}if(range)match=match.slice(range[0],range[1]+1);result={data:match,error:null};}
+      return Promise.resolve(result).then(resolve,reject);
+    }};return q;
+  }
+  const client={from:query,auth:{onAuthStateChange(fn){authCallback=fn},getSession:async()=>({data:{session:null},error:null}),signInWithPassword:async()=>({data:{session:user},error:null}),signOut:async()=>{authCallback('SIGNED_OUT',null);return {error:null}}},storage:{from:()=>({createSignedUrls:async paths=>({data:paths.map(path=>({path,signedUrl:'https://example.com/'+path})),error:null}),upload:async path=>{objects.add(path);return {error:null}},remove:async paths=>{paths.forEach(p=>objects.delete(p));return {error:null}},download:async()=>({data:new Blob(['photo'],{type:'image/jpeg'}),error:null})})}};
+  const context={window:{LOVE_SUPABASE:configured?{url:'https://example.supabase.co',publishableKey:'sb_publishable_test',journalId:'00000000-0000-0000-0000-000000000001'}:{},supabase:{createClient:()=>client}},document:{getElementById:node,hidden:false,addEventListener(){},createElement:()=>({width:0,height:0,getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['photo'],{type:'image/jpeg'})),click(){}})},state:{records:[],anniversary:'',checks:[]},render(){},toast:m=>messages.push(m),confirm:()=>true,resize:async()=> 'data:image/jpeg;base64,YQ==',crypto:webcrypto,TextEncoder,Blob,URL,atob,console,setTimeout:()=>{},setInterval:()=>{},FormData:class{constructor(x){this.fields=x.fields||{}}get(k){return this.fields[k]??''}},Image:class{width=100;height=100;set src(x){this.onload()}},FileReader:class{readAsDataURL(){this.result='data:image/jpeg;base64,YQ==';this.onload()}}};
+  vm.createContext(context);vm.runInContext(fs.readFileSync(__dirname+'/cloud.js','utf8'),context);
+  return {context,node,messages,records,objects,setFail:v=>failInsert=v,setMember:v=>member=v,async login(){await new Promise(setImmediate);await node('cloud-form').onsubmit({preventDefault(){},target:{fields:{email:'one@example.com',password:'example'},querySelector:()=>node('loginbutton'),reset(){}}});},async submit(fields){await node('memory-form').onsubmit({preventDefault(){},target:{fields,querySelector:()=>node('submitbutton')}});}};
+}
+test('Unconfigured project preserves local mode and never pretends cloud is ready',()=>{const x=setup(false);assert.match(x.node('cloud-status').textContent,/云端待连接/);assert.equal(x.context.window.loveVisibleRecords(),x.context.state.records);});
+test('Cloud login, photo upload, shared deletion and logout isolation',async()=>{const x=setup();await x.login();assert.match(x.node('cloud-mode').textContent,/云端/);await x.submit({title:'test',date:'2026-11-01',category:'日常',text:'memory',photo:{size:1}});assert.equal(x.records.length,1);assert.equal(x.objects.size,1);assert.equal(x.context.state.records.length,0);assert.match(x.context.window.loveVisibleRecords()[0].photo,/https:/);await x.context.window.loveCloudDelete(x.records[0].id);assert.equal(x.records.length,0);assert.equal(x.objects.size,0);await x.node('cloud-logout').onclick();assert.equal(x.context.window.loveVisibleRecords(),x.context.state.records);});
+test('Migration is retry-safe and preserves local photos',async()=>{const x=setup();x.context.state.records.push({id:'old1',title:'old',date:'2026-11-01',category:'美食',text:'hello',photo:'data:image/jpeg;base64,YQ=='});await x.login();await x.node('cloud-migrate').onclick();await x.node('cloud-migrate').onclick();assert.equal(x.records.length,1);assert.equal(x.objects.size,1);assert.equal(x.context.state.records.length,1);assert.match(x.node('cloud-status').textContent,/已存在 1/);});
+test('Failed insert cleans photo and retains editor; nonmember read is rejected',async()=>{const x=setup();await x.login();x.setFail(true);x.node('editor').open=true;await x.submit({title:'test',date:'2026-11-01',category:'日常',text:'memory',photo:{size:1}});assert.equal(x.objects.size,0);assert.equal(x.records.length,0);assert.equal(x.node('editor').open,true);assert(x.messages.some(m=>m.includes('表单已保留')));x.setMember(false);await x.node('cloud-refresh').onclick();await new Promise(setImmediate);assert.match(x.node('cloud-status').textContent,/尚未加入/);assert.equal(x.context.window.loveVisibleRecords().length,0);});
