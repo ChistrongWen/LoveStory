@@ -1,0 +1,28 @@
+'use strict';
+const $=s=>document.querySelector(s),storageKey='little-days-places-v1';
+const initial=[{id:'hong-kong',name:'香港',lon:114.1694,lat:22.3193,url:''}];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function destination(p){const url=new URL(p.url||('place.html?id='+encodeURIComponent(p.id)+'&name='+encodeURIComponent(p.name)),location.href);if(!['http:','https:'].includes(url.protocol))throw Error('链接仅支持网页地址');return url.href}
+function valid(p){return p&&typeof p.id==='string'&&p.id.length>0&&typeof p.name==='string'&&p.name.trim().length>0&&p.name.length<=60&&Number.isFinite(p.lon)&&Math.abs(p.lon)<=180&&Number.isFinite(p.lat)&&Math.abs(p.lat)<=85&&typeof p.url==='string'&&p.url.length<=2000}
+let places=initial.map(p=>({...p})),editing=null,map,markers;
+function notice(t){$('#toast').textContent=t;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',3500)}
+try{const raw=localStorage.getItem(storageKey);if(raw!==null){const data=JSON.parse(raw);if(!Array.isArray(data)||!data.every(valid))throw Error();data.forEach(destination);places=data}}catch{notice('地点数据未能读取；暂显示香港，原有存储尚未改写。')}
+function persist(next){try{localStorage.setItem(storageKey,JSON.stringify(next));places=next;render();return true}catch{notice('保存失败，请检查浏览器存储空间');return false}}
+function editor(p=null,coords=null){editing=p?p.id:null;$('#place-form').reset();$('#editor-title').textContent=p?'编辑地点':'增加一个地点';for(const name of ['name','lon','lat','url'])$('#place-form').elements[name].value=p?p[name]:(coords&&name==='lon'?coords.lon:coords&&name==='lat'?coords.lat:'');$('#form-error').textContent='';$('#place-editor').showModal()}
+function render(){
+  $('#count').textContent=places.length+' 个地点';
+  $('#place-list').innerHTML=places.length?places.map(p=>'<article class="place-row"><a href="'+esc(destination(p))+'" target="_blank" rel="noopener">'+esc(p.name)+' ↗</a><small>'+p.lon.toFixed(4)+'°, '+p.lat.toFixed(4)+'°</small><div class="place-actions"><button data-locate="'+esc(p.id)+'">定位</button><button data-edit="'+esc(p.id)+'">编辑</button><button class="delete-place" data-delete="'+esc(p.id)+'">删除</button></div></article>').join(''):'<p class="hint">地图还空着，增加第一个地点吧。</p>';
+  if(markers){markers.clearLayers();for(const p of places){const icon=L.divIcon({className:'heart-marker',iconSize:[30,30],iconAnchor:[15,15],html:'<a href="'+esc(destination(p))+'" target="_blank" rel="noopener" aria-label="打开'+esc(p.name)+'">♡</a>'});L.marker([p.lat,p.lon],{icon,keyboard:false}).addTo(markers).bindTooltip(esc(p.name),{permanent:true,direction:'bottom',offset:[0,15]})}}
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editor(places.find(p=>p.id===b.dataset.edit)));
+  document.querySelectorAll('[data-locate]').forEach(b=>b.onclick=()=>{const p=places.find(p=>p.id===b.dataset.locate);if(map)map.setView([p.lat,p.lon],6);else notice('地图未加载，请刷新后重试')});
+  document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{const p=places.find(p=>p.id===b.dataset.delete);if(confirm('删除“'+p.name+'”这个地图标记？'))persist(places.filter(x=>x.id!==p.id))});
+}
+$('#add-place').onclick=()=>editor();$('#close-editor').onclick=()=>$('#place-editor').close();
+$('#place-form').onsubmit=e=>{e.preventDefault();const f=e.target.elements;const p={id:editing||(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)),name:f.name.value.trim(),lon:Number(f.lon.value),lat:Number(f.lat.value),url:f.url.value.trim()};try{if(!valid(p))throw Error('请检查地点名称和经纬度');destination(p);if(persist(editing?places.map(x=>x.id===editing?p:x):[...places,p])){$('#place-editor').close();notice('地点已保存 ♡')}}catch(err){$('#form-error').textContent=err.message}};
+$('#world-view').onclick=()=>{if(map)map.fitBounds([[-60,-180],[80,180]])};
+if(window.L){map=L.map('world-map',{worldCopyJump:false,minZoom:1,maxZoom:18,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1});L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{noWrap:true,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).on('load',()=>$('#map-status').textContent='可缩放、拖动 · 点击地图空白处增加地点').on('tileerror',()=>$('#map-status').textContent='部分底图未能加载，请检查网络；地点列表仍可使用。').addTo(map);markers=L.layerGroup().addTo(map);map.fitBounds([[-60,-180],[80,180]]);map.on('click',e=>editor(null,{lon:Number(e.latlng.lng.toFixed(4)),lat:Number(e.latlng.lat.toFixed(4))}))}else $('#map-status').textContent='地图组件未能加载，请检查网络后刷新；地点列表仍可使用。';
+$('#export-places').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify({version:1,places},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='我们的旅行地点.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
+$('#import-places').onclick=()=>$('#places-file').click();
+$('#places-file').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(!Array.isArray(data.places)||data.places.length>1000||!data.places.every(valid)||new Set(data.places.map(p=>p.id)).size!==data.places.length)throw Error('地点备份格式不正确');data.places.forEach(destination);if(confirm('导入将替换当前浏览器的地图地点，继续？'))persist(data.places)}catch(err){notice(err.message)}finally{e.target.value=''}};
+window.addEventListener('storage',e=>{if(e.key===storageKey){try{const data=JSON.parse(e.newValue||'[]');if(Array.isArray(data)&&data.every(valid)){data.forEach(destination);places=data;render()}}catch{}}});
+render();
