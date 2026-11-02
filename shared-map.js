@@ -8,7 +8,13 @@
     if(!session||busy)return;if(pending)return pending;const token=epoch;
     const run=(async()=>{try{
       const m=await client.from('love_members').select('journal_id').eq('journal_id',cfg.journalId).eq('user_id',session.user.id).maybeSingle();if(m.error)throw m.error;if(!m.data)throw Error('账号尚未加入共同手账');
-      const next=await store.read('places');if(token!==epoch)return;
+      let next=await store.read('places');if(token!==epoch)return;
+      // Seed only a missing document; an intentionally empty map stays empty.
+      if(next.value===null&&next.version===0){
+        try{next=await store.write('places',initial.map(p=>({...p})),0)}
+        catch(error){next=await store.read('places');if(next.value===null)throw error}
+        if(token!==epoch)return;
+      }
       const value=next.value||[];if(!Array.isArray(value)||!value.every(valid))throw Error('云端地点数据格式不正确');value.forEach(destination);
       doc=next;places=value;ready=true;render();el('places-storage').textContent='共同旅行地图 · 两人可编辑 · 每 2 分钟刷新';
     }catch(e){if(token===epoch){ready=false;places=[];render();el('places-storage').textContent='地图同步失败：'+e.message}}
