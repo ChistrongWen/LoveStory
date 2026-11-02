@@ -9,10 +9,16 @@
     const run=(async()=>{try{
       const m=await client.from('love_members').select('journal_id').eq('journal_id',cfg.journalId).eq('user_id',session.user.id).maybeSingle();if(m.error)throw m.error;if(!m.data)throw Error('账号尚未加入共同手账');
       let next=await store.read('places');if(token!==epoch)return;
-      // Seed only a missing document; an intentionally empty map stays empty.
-      if(next.value===null&&next.version===0){
-        try{next=await store.write('places',initial.map(p=>({...p})),0)}
-        catch(error){next=await store.read('places');if(next.value===null)throw error}
+      // One-time migration also covers maps saved as [] by the earlier version.
+      const seeded=await store.read('places-default-hong-kong-v1');if(token!==epoch)return;
+      if(seeded.value!==true){
+        if(next.value===null||(Array.isArray(next.value)&&next.value.length===0)){
+          try{next=await store.write('places',initial.map(p=>({...p})),next.version)}
+          catch(error){next=await store.read('places');if(!Array.isArray(next.value)||!next.value.length)throw error}
+          if(token!==epoch)return;
+        }
+        try{await store.write('places-default-hong-kong-v1',true,seeded.version)}
+        catch(error){const check=await store.read('places-default-hong-kong-v1');if(check.value!==true)throw error}
         if(token!==epoch)return;
       }
       const value=next.value||[];if(!Array.isArray(value)||!value.every(valid))throw Error('云端地点数据格式不正确');value.forEach(destination);
