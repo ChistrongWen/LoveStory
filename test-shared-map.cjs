@@ -1,0 +1,11 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');
+async function setup(db={}){
+ const nodes={},messages=[];let auth;const node=id=>nodes[id]??={textContent:'',disabled:false,hidden:false,close(){}};
+ const store={async read(){return structuredClone(db.doc||{value:null,version:0})},async write(k,value,version){if((db.doc?.version||0)!==version)throw Error('另一人已修改');return db.doc={value:structuredClone(value),version:version+1}}};
+ const client={from(){const q={select:()=>q,eq:()=>q,maybeSingle:async()=>({data:{journal_id:'j'}})};return q},auth:{onAuthStateChange:f=>auth=f,getSession:async()=>({data:{session:{user:{id:'one'}}}})}};
+ const context={window:{LOVE_SUPABASE:{url:'url',publishableKey:'key',journalId:'j'},supabase:{createClient:()=>client},createJournalStore:()=>store},document:{getElementById:node,hidden:false,addEventListener(){}},places:[{id:'local',name:'local'}],valid:p=>typeof p.name==='string',destination(){},render(){},localPersist(next){context.places=next;return true},notice:m=>messages.push(m),setInterval(){},setTimeout:f=>f()};
+ vm.createContext(context);vm.runInContext(fs.readFileSync(__dirname+'/shared-map.js','utf8'),context);await new Promise(setImmediate);
+ return {context,node,messages,refresh:()=>node('refresh-places').onclick(),save:(next,v)=>context.window.loveMapPersist(next,v),logout:async()=>{auth('SIGNED_OUT',null);await new Promise(setImmediate)}};
+}
+test('Map edits synchronize; stale saves do not replace newer changes',async()=>{const db={},a=await setup(db),b=await setup(db);assert.equal(a.context.places.length,0);await a.save([{id:'a',name:'香港'}],0);await b.refresh();assert.equal(b.context.places[0].name,'香港');await b.save([{id:'b',name:'京都'}],1);assert.equal(await a.save([{id:'a',name:'旧修改'}],1),false);assert.equal(db.doc.value[0].name,'京都')});
+test('Local locations can be shared once and remain available after logout',async()=>{const a=await setup();await a.node('share-local-places').onclick();await a.node('share-local-places').onclick();assert.equal(a.context.places.length,1);await a.logout();assert.equal(a.context.places[0].id,'local');assert.match(a.node('places-storage').textContent,/本机地图/)});

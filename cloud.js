@@ -20,6 +20,7 @@
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cfg.journalId || '');
   }
   function display() {
+    if(window.loveSettingsContext)window.loveSettingsContext({client,session,mode,journalId:cfg.journalId});
     if(window.loveTodoContext)window.loveTodoContext({client,session,mode,journalId:cfg.journalId});
     el('cloud-mode').textContent = mode === 'cloud' ? '我们的云端手帐' : '本机手帐';
     el('cloud-login').hidden = !!session;
@@ -130,7 +131,7 @@
     if (mode==='cloud') refresh();
     else message('当前为本机手帐；此处新增记录不会自动上传。');
   };
-  el('cloud-refresh').onclick = () => { if(mode==='cloud'){refresh();if(window.loveRefreshTodos)window.loveRefreshTodos();} };
+  el('cloud-refresh').onclick = () => { if(mode==='cloud'){refresh();if(window.loveRefreshTodos)window.loveRefreshTodos();if(window.loveRefreshSettings)window.loveRefreshSettings();} };
   function jpegBlob(dataURL) {
     if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataURL)) throw Error('照片格式无效');
     return new Promise((resolve,reject)=>{
@@ -187,11 +188,11 @@
     busy=true;const button=e.target.querySelector('[type=submit]');button.disabled=true;
     try {
       const fd=new FormData(e.target),record={title:fd.get('title'),date:fd.get('date'),category:fd.get('category'),location:fd.get('location'),text:fd.get('text')};
+      if(e.target.dataset?.editId){const result=await client.from('love_memories').update({...record,version:Number(e.target.dataset.editVersion)+1}).eq('journal_id',cfg.journalId).eq('id',e.target.dataset.editId).eq('version',Number(e.target.dataset.editVersion)).select('id');if(result.error)throw result.error;if(!result.data.length)throw Error('回忆已被另一人修改或删除，请重新打开后编辑');el('editor').close();toast('共同回忆已更新 ♡');return}
       record.photos=await readPhotos(fd);
       await uploadRecord(record);el('editor').close();toast('已保存到我们的云端手帐 ♡');
     } catch(err){toast('上传失败，表单已保留：'+err.message);}
-    finally{busy=false;button.disabled=false;}
-    await refresh();
+    finally{busy=false;button.disabled=false;await refresh();}
   };
   el('cloud-migrate').onclick = async () => {
     if(busy || loading || !session || mode!=='cloud')return;
@@ -230,7 +231,7 @@
       if(version!==epoch)throw Error('登录状态已改变，请重试');
       const todoBackup=window.loveTodoBackup?await window.loveTodoBackup():{checks:state.checks,customTodos:state.customTodos};
       if(version!==epoch)throw Error('登录状态已改变，请重试');
-      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,...todoBackup},null,2)],{type:'application/json'}));
+      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:window.loveSharedAnniversary?window.loveSharedAnniversary():state.anniversary,...todoBackup},null,2)],{type:'application/json'}));
       const link=document.createElement('a');link.href=url;link.download='我们的小日子-云端备份.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('云端备份已导出（含照片）');
     }catch(err){toast('导出失败：'+err.message);}finally{busy=false;}
   };
@@ -245,7 +246,7 @@
   try{client=window.supabase.createClient(cfg.url,cfg.publishableKey);}catch(err){message('云端配置无效：'+err.message);return;}
   client.auth.onAuthStateChange((event,next)=>{
     if(event==='SIGNED_OUT' || (session && next && session.user.id!==next.user.id)){
-      epoch++;cloudRows=[];mode='local';el('detail').close();
+      epoch++;cloudRows=[];mode='local';el('detail').close();el('editor').close();
     }
     session=next;display();
     // Keep asynchronous database work outside Supabase's auth callback.

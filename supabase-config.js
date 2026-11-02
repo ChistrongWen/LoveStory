@@ -1,6 +1,6 @@
-// Public browser configuration. Access is protected by Supabase Auth and RLS.
+// Public browser key only; private data is protected by membership and RLS.
 window.LOVE_SUPABASE = Object.freeze({
-  url: 'https://bvzdyqmelyocffelktxc.supabase.co',
-  publishableKey: 'sb_publishable_QghzwMelqlvMCEICeXCL9Q_8dfrWcGj',
-  journalId: '3780c2d8-0c33-414c-91e1-2ecfb185af7e'
+  url: 'https://bpsuersynkgyndbzkeip.supabase.co',
+  publishableKey: 'sb_publishable_5_M8umE06hpP4n_ApZC32Q_SOEkI6dD',
+  journalId: '92c09416-9922-4eae-b381-ca27dc3e6217'
 });

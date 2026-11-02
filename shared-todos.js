@@ -15,9 +15,19 @@
     migrate.textContent = '共享本机待办（' + state.customTodos.length + '）';
   }
   function draw() {
-    list.innerHTML = rows.map(r => `<label><input type="checkbox" data-cloud-todo="${esc(r.id)}" ${r.done ? 'checked' : ''} ${busy || pending ? 'disabled' : ''}> ${esc(r.title)}</label>`).join('');
+    list.innerHTML = rows.map(r => `<label><input type="checkbox" data-cloud-todo="${esc(r.id)}" ${r.done ? 'checked' : ''} ${busy || pending ? 'disabled' : ''}> ${esc(r.title)}</label><div class="todo-row-actions"><button class="text-button" data-todo-edit="${esc(r.id)}" ${busy || pending ? 'disabled' : ''}>编辑</button> <button class="text-button" data-todo-delete="${esc(r.id)}" ${busy || pending ? 'disabled' : ''}>删除</button></div>`).join('');
     list.querySelectorAll('[data-cloud-todo]').forEach(box => {
       box.onchange = () => update(box.dataset.cloudTodo, box.checked);
+    });
+    list.querySelectorAll('[data-todo-edit]').forEach(button=>button.onclick=()=>{
+      const row=rows.find(r=>r.id===button.dataset.todoEdit);if(!row)return;
+      const value=prompt('修改这条共同待办',row.title);if(value===null)return;const title=value.trim();
+      if(!title||title.length>100){toast('请输入 1–100 字');return}
+      return mutate(async current=>{const result=await current.client.from('love_todos').update({title}).eq('journal_id',current.journalId).eq('id',row.id).eq('title',row.title).select('id');if(result.error)throw result.error;if(!result.data.length)throw Error('事项已改变，请刷新后重试')},()=>toast('待办已更新'));
+    });
+    list.querySelectorAll('[data-todo-delete]').forEach(button=>button.onclick=()=>{
+      if(!confirm('删除这条共同待办？两个人都将看不到它。'))return;
+      return mutate(async current=>{const result=await current.client.from('love_todos').delete().eq('journal_id',current.journalId).eq('id',button.dataset.todoDelete);if(result.error)throw result.error},()=>toast('待办已删除'));
     });
     controls();
   }
