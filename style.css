@@ -4,3 +4,6 @@
 
 /* Shared journal */
 [hidden]{display:none!important}.cloud-panel{margin:0 0 24px;padding:20px 22px;border:1px solid #d5cabb;border-radius:10px;background:#faf7ef}.cloud-top,.cloud-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.cloud-top strong{color:#665e4a}.cloud-top span{font-size:12px;overflow-wrap:anywhere}.cloud-panel p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}.cloud-panel small{display:block;margin-top:12px;color:#796e61;font-size:11px}.cloud-actions button{font-size:12px}.cloud-panel button:disabled,button:disabled{opacity:.55;cursor:wait}#cloud-auth p{font-size:13px;overflow-wrap:anywhere}@media(max-width:480px){.cloud-panel{padding:16px}.cloud-actions{gap:8px}.cloud-actions .outline{padding:9px 11px}}
+
+/* Memory actions and photo albums */
+.memory-card{position:relative;min-width:0}.memory-card>.card{width:100%;height:100%;display:block}.card-delete{position:absolute;right:10px;top:10px;background:#fffdf8ed;border:1px solid #deded1;border-radius:4px;padding:5px 12px;font-size:11px;color:#945946}.album-gallery{display:grid;gap:12px;margin:15px 0}.album-gallery img{display:block;width:100%;height:auto;border-radius:4px}

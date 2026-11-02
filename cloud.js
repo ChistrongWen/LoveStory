@@ -39,13 +39,14 @@
     if (!r) return true;
     busy = true;
     try {
+      const paths=await albumPaths(r);
       const result = await client.from('love_memories').delete().eq('journal_id',cfg.journalId).eq('id',id).select('id');
       if (result.error) throw result.error;
       if (!result.data.length) throw Error('记录未删除，请刷新并检查权限');
       cloudRows = cloudRows.filter(x => x.id !== id);
       el('detail').close(); render();
       if (r.photo_path) {
-        const removed = await client.storage.from('love-photos').remove([r.photo_path]);
+        const removed = await client.storage.from('love-photos').remove(paths);
         if (removed.error) { toast('回忆已删除，但照片清理失败，请稍后在存储中清理。'); return true; }
       }
       toast('共享回忆已删除');
@@ -53,6 +54,13 @@
     finally { busy = false; }
     return true;
   };
+  async function albumPaths(r) {
+    if (!r.photo_path) return [];
+    const folder=cfg.journalId+'/'+r.id;
+    const listed=await client.storage.from('love-photos').list(folder,{limit:100,sortBy:{column:'name',order:'asc'}});
+    if(listed.error)throw listed.error;
+    return [r.photo_path,...listed.data.filter(x=>/^\d{3}\.jpg$/.test(x.name)).map(x=>folder+'/'+x.name)];
+  }
   async function refresh() {
     if (!client || !session || loading || busy) return;
     const version = epoch;
@@ -69,7 +77,8 @@
         if (page.data.length < 500) break;
         from += 500;
       }
-      const paths = data.filter(r=>r.photo_path).map(r=>r.photo_path), urls = new Map();
+      for(const r of data)r.photo_paths=await albumPaths(r);
+      const paths = data.flatMap(r=>r.photo_paths), urls = new Map();
       for (let i=0;i<paths.length;i+=100) {
         const signed = await client.storage.from('love-photos').createSignedUrls(paths.slice(i,i+100),3600);
         if (signed.error) throw signed.error;
@@ -78,7 +87,7 @@
       }
       if (epoch !== version || !session) return;
       synced = true;
-      cloudRows = data.map(r=>({...r,photo:r.photo_path?urls.get(r.photo_path):undefined}));
+      cloudRows = data.map(r=>({...r,photo:r.photo_path?urls.get(r.photo_path):undefined,photos:r.photo_paths.map(p=>urls.get(p))}));
       message('云端已同步 · ' + data.length + ' 条回忆 · ' + new Date().toLocaleTimeString() + '（每 30 秒自动刷新）');
       display();
     } catch(e) {
@@ -141,12 +150,21 @@
       if(prior.error)throw prior.error;
       if(prior.data)return false;
     }
-    const id=crypto.randomUUID(),path=record.photo?cfg.journalId+'/'+id+'.jpg':null;
-    if(path){
-      const blob=await jpegBlob(record.photo);
-      if(blob.size>5*1024*1024)throw Error('压缩后照片仍超过 5 MB');
-      const up=await client.storage.from('love-photos').upload(path,blob,{contentType:'image/jpeg',upsert:false});
-      if(up.error)throw up.error;
+    const id=crypto.randomUUID(),photos=photosOf(record);
+    if(photos.length>20)throw Error('每条回忆最多上传 20 张照片');
+    const path=photos.length?cfg.journalId+'/'+id+'.jpg':null, uploaded=[];
+    try {
+      for(let i=0;i<photos.length;i++){
+        const target=i===0?path:cfg.journalId+'/'+id+'/'+String(i).padStart(3,'0')+'.jpg';
+        const blob=await jpegBlob(photos[i]);
+        if(blob.size>5*1024*1024)throw Error('压缩后照片仍超过 5 MB');
+        const up=await client.storage.from('love-photos').upload(target,blob,{contentType:'image/jpeg',upsert:false});
+        if(up.error)throw up.error;
+        uploaded.push(target);
+      }
+    } catch(err) {
+      if(uploaded.length)await client.storage.from('love-photos').remove(uploaded);
+      throw err;
     }
     const entry={id,journal_id:cfg.journalId,created_by:user,title:record.title,date:record.date,category:record.category,location:record.location||'',text:record.text,photo_path:path,legacy_key:legacyKey};
     const inserted=await client.from('love_memories').insert(entry);
@@ -154,7 +172,7 @@
       // Confirm whether an ambiguous network failure actually committed before cleanup.
       const verify=await client.from('love_memories').select('id').eq('id',id).eq('journal_id',cfg.journalId).maybeSingle();
       if(!verify.error && verify.data)return true;
-      if(!verify.error && path)await client.storage.from('love-photos').remove([path]);
+      if(!verify.error && path)await client.storage.from('love-photos').remove(uploaded);
       if(legacyKey && inserted.error.code==='23505')return false;
       throw inserted.error;
     }
@@ -167,8 +185,8 @@
     if(!session){requireLogin();return;}
     busy=true;const button=e.target.querySelector('[type=submit]');button.disabled=true;
     try {
-      const fd=new FormData(e.target),record={title:fd.get('title'),date:fd.get('date'),category:fd.get('category'),location:fd.get('location'),text:fd.get('text')},file=fd.get('photo');
-      if(file && file.size)record.photo=await resize(file);
+      const fd=new FormData(e.target),record={title:fd.get('title'),date:fd.get('date'),category:fd.get('category'),location:fd.get('location'),text:fd.get('text')};
+      record.photos=await readPhotos(fd);
       await uploadRecord(record);el('editor').close();toast('已保存到我们的云端手帐 ♡');
     } catch(err){toast('上传失败，表单已保留：'+err.message);}
     finally{busy=false;button.disabled=false;}
@@ -185,7 +203,7 @@
         message('正在迁移 '+(i+1)+' / '+local.length+'，请保持页面打开…');
         try {
           // Stable SHA-256 deduplicates the same exported record across devices/retries.
-          const r=local[i],bytes=new TextEncoder().encode(JSON.stringify([r.id,r.title,r.date,r.category,r.location||'',r.text,r.photo||'']));
+          const r=local[i],bytes=new TextEncoder().encode(JSON.stringify([r.id,r.title,r.date,r.category,r.location||'',r.text,photosOf(r).length>1?photosOf(r):(photosOf(r)[0]||'')]));
           const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
           (await uploadRecord(r,'local:'+hash))?added++:skipped++;
         } catch(err){failed++;console.warn('Migration failed for record',i+1,err.message);}
@@ -201,10 +219,12 @@
     try {
       let records=[];
       for(const r of cloudRows){
-        let photo;
-        if(r.photo_path){const d=await client.storage.from('love-photos').download(r.photo_path);if(d.error)throw d.error;
-          photo=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(d.data);});}
-        records.push({id:r.id,title:r.title,date:r.date,category:r.category,location:r.location,text:r.text,...(photo?{photo}:{})});
+        const photos=[];
+        for(const path of await albumPaths(r)){
+          const d=await client.storage.from('love-photos').download(path);if(d.error)throw d.error;
+          photos.push(await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(d.data);}));
+        }
+        records.push({id:r.id,title:r.title,date:r.date,category:r.category,location:r.location,text:r.text,photos,...(photos.length?{photo:photos[0]}:{})});
       }
       if(version!==epoch)throw Error('登录状态已改变，请重试');
       const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,checks:state.checks},null,2)],{type:'application/json'}));
