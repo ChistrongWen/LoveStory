@@ -88,7 +88,7 @@
       if (epoch !== version || !session) return;
       synced = true;
       cloudRows = data.map(r=>({...r,photo:r.photo_path?urls.get(r.photo_path):undefined,photos:r.photo_paths.map(p=>urls.get(p))}));
-      message('云端已同步 · ' + data.length + ' 条回忆 · ' + new Date().toLocaleTimeString() + '（每 30 分钟自动刷新）');
+      message('云端已同步 · ' + data.length + ' 条回忆 · ' + new Date().toLocaleTimeString() + '（每 2 分钟自动刷新）');
       display();
     } catch(e) {
       if (epoch === version) { synced=false; cloudRows=[]; render(); message('同步失败：' + e.message + '。请刷新云端后重试。'); }
@@ -227,7 +227,7 @@
         records.push({id:r.id,title:r.title,date:r.date,category:r.category,location:r.location,text:r.text,photos,...(photos.length?{photo:photos[0]}:{})});
       }
       if(version!==epoch)throw Error('登录状态已改变，请重试');
-      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,checks:state.checks},null,2)],{type:'application/json'}));
+      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,checks:state.checks,customTodos:state.customTodos},null,2)],{type:'application/json'}));
       const link=document.createElement('a');link.href=url;link.download='我们的小日子-云端备份.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('云端备份已导出（含照片）');
     }catch(err){toast('导出失败：'+err.message);}finally{busy=false;}
   };
@@ -254,6 +254,6 @@
     if(session){mode='cloud';epoch++;display();await refresh();}
     else message('登录后可访问两人的共同手帐；当前为本机模式。');
   }).catch(err=>message('连接失败：'+err.message));
-  setInterval(()=>{if(!document.hidden && mode==='cloud')refresh();},30 * 60 * 1000);
+  setInterval(()=>{if(!document.hidden && mode==='cloud')refresh();},120000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && mode==='cloud')refresh();});
 })();
