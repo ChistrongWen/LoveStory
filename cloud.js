@@ -20,6 +20,7 @@
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cfg.journalId || '');
   }
   function display() {
+    if(window.loveTodoContext)window.loveTodoContext({client,session,mode,journalId:cfg.journalId});
     el('cloud-mode').textContent = mode === 'cloud' ? '我们的云端手帐' : '本机手帐';
     el('cloud-login').hidden = !!session;
     el('cloud-logout').hidden = !session;
@@ -129,7 +130,7 @@
     if (mode==='cloud') refresh();
     else message('当前为本机手帐；此处新增记录不会自动上传。');
   };
-  el('cloud-refresh').onclick = () => { if(mode==='cloud') refresh(); };
+  el('cloud-refresh').onclick = () => { if(mode==='cloud'){refresh();if(window.loveRefreshTodos)window.loveRefreshTodos();} };
   function jpegBlob(dataURL) {
     if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataURL)) throw Error('照片格式无效');
     return new Promise((resolve,reject)=>{
@@ -227,7 +228,9 @@
         records.push({id:r.id,title:r.title,date:r.date,category:r.category,location:r.location,text:r.text,photos,...(photos.length?{photo:photos[0]}:{})});
       }
       if(version!==epoch)throw Error('登录状态已改变，请重试');
-      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,checks:state.checks,customTodos:state.customTodos},null,2)],{type:'application/json'}));
+      const todoBackup=window.loveTodoBackup?await window.loveTodoBackup():{checks:state.checks,customTodos:state.customTodos};
+      if(version!==epoch)throw Error('登录状态已改变，请重试');
+      const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:state.anniversary,...todoBackup},null,2)],{type:'application/json'}));
       const link=document.createElement('a');link.href=url;link.download='我们的小日子-云端备份.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('云端备份已导出（含照片）');
     }catch(err){toast('导出失败：'+err.message);}finally{busy=false;}
   };

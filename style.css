@@ -10,3 +10,5 @@
 
 /* Custom checklist entries retain the paper-note layout on small screens. */
 .notes,.note{min-width:0}.note label{overflow-wrap:anywhere}.todo-form{margin:18px 0 14px}.todo-form label{margin-bottom:6px}.todo-input-row{display:flex;flex-wrap:wrap;gap:8px}.todo-input-row input{flex:1 1 120px;min-width:0;width:100%;border:1px solid #bfb696;border-radius:3px;background:#fffdf7;padding:8px;font-size:12px;color:var(--ink)}.todo-input-row button{padding:8px 12px}.todo-input-row input:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+.note .todo-status{font:11px/1.7 sans-serif;color:#746f53;margin:12px 0}.todo-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.todo-actions .outline{font-size:10px;padding:6px 9px}
