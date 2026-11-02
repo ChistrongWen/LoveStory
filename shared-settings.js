@@ -1,26 +1,44 @@
 (() => {
-  const el=id=>document.getElementById(id),defaults={notes:notes.slice(),anniversary:state.anniversary,music:audio.src};
+  const el=id=>document.getElementById(id),defaults={notes:notes.slice(),music:audio.src};
+  const initialAnniversary=window.LOVE_SUPABASE?.publicAnniversary||'2023-08-22';
+  let publicAnniversary=initialAnniversary,publicReady=false,publicPending=null;
   let source=null,store=null,epoch=0,ready=false,busy=false,pending=null,docs={},editVersion=0,editEpoch=0,musicPath='',musicExpires=0;
   const isCloud=()=>source?.mode==='cloud'&&source.session&&source.client;
-  const localAnniversary=el('config-form').onsubmit,localAudio=el('audioFile').onchange,localSettings=el('settings').onclick;
+  const localAudio=el('audioFile').onchange;
   function status(s){el('shared-settings-status').textContent=s}
-  function controls(){el('edit-notes').disabled=!isCloud()||!ready||busy;el('share-anniversary').hidden=!isCloud()||!state.anniversary;}
-  function restore(){el('shared-places-preview').innerHTML='<p>登录共同手账后，一起收藏旅行地点。</p>';notes=defaults.notes.slice();noteIndex=0;el('little-note').innerText=notes[0];applyAnniversary(state.anniversary);audio.pause();audio.src=defaults.music;musicPath='';musicExpires=0;}
+  function controls(){el('edit-notes').disabled=!isCloud()||!ready||busy;el('share-anniversary').hidden=!isCloud()||!ready||!publicReady||!state.anniversary;el('settings').textContent=isCloud()?'修改我们的纪念日 ↗':'登录后修改纪念日 ↗';}
+  function restore(){el('shared-places-preview').innerHTML='<p>登录共同手账后，一起收藏旅行地点。</p>';notes=defaults.notes.slice();noteIndex=0;el('little-note').innerText=notes[0];applyAnniversary(publicAnniversary);audio.pause();audio.src=defaults.music;musicPath='';musicExpires=0;}
   function applyAnniversary(value){
     if(!value){el('since').textContent='设置我们的纪念日';el('days').textContent='把故事开始的那天，记在这里。';return}
-    const start=new Date(value+'T00:00:00'),today=new Date();today.setHours(0,0,0,0);const days=Math.floor((today-start)/864e5);
+    const [year,month,day]=value.split('-').map(Number),today=new Date();const days=Math.floor((Date.UTC(today.getFullYear(),today.getMonth(),today.getDate())-Date.UTC(year,month-1,day))/864e5);
     el('since').textContent=value.replaceAll('-','.');el('days').textContent=days>=0?`一起走过 ${days+1} 天，还想一起走很远。`:`距离故事开始，还有 ${-days} 天。`;
   }
+  async function refreshPublic(){
+    if(publicPending)return publicPending;
+    if(!source?.client)return;
+    const token=epoch,client=source.client;
+    const run=(async()=>{try{
+      const result=await client.rpc('love_public_anniversary');
+      if(result.error)throw result.error;
+      if(token!==epoch)return;
+      publicReady=true;
+      publicAnniversary=typeof result.data==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(result.data)?result.data:initialAnniversary;
+      applyAnniversary(publicAnniversary);
+    }catch{if(token===epoch)publicReady=false}
+    finally{if(token===epoch)controls()}})();
+    publicPending=run;try{await run}finally{if(publicPending===run)publicPending=null}
+  }
   async function refresh(){
-    if(!isCloud()||busy)return;if(pending)return pending;
+    if(!isCloud())return refreshPublic();if(busy)return;if(pending)return pending;
     const token=epoch,current=source,currentStore=store;
     const run=(async()=>{try{
+      await refreshPublic();if(token!==epoch)return;
       const member=await current.client.from('love_members').select('journal_id').eq('journal_id',current.journalId).eq('user_id',current.session.user.id).maybeSingle();if(member.error)throw member.error;if(!member.data)throw Error('当前账号尚未加入共同手账');
       const entries=await Promise.all(['anniversary','notes','music','places'].map(async key=>[key,await currentStore.read(key)]));
       if(token!==epoch)return;docs=Object.fromEntries(entries);ready=true;
       const sharedPlaces=Array.isArray(docs.places.value)?docs.places.value:[];
       el('shared-places-preview').innerHTML=sharedPlaces.length?sharedPlaces.map(p=>`<a href="travel-map.html">♡ ${esc(p.name)}</a>`).join(''):'<p>共同地图还是空的，打开世界地图添加第一站吧。</p>';
-      applyAnniversary(typeof docs.anniversary.value==='string'?docs.anniversary.value:'');
+      if(publicReady){publicAnniversary=typeof docs.anniversary.value==='string'?docs.anniversary.value:initialAnniversary;applyAnniversary(publicAnniversary)}
       const nextNotes=docs.notes.value;
       notes=Array.isArray(nextNotes)&&nextNotes.length&&nextNotes.every(s=>typeof s==='string')?nextNotes:defaults.notes.slice();noteIndex%=notes.length;el('little-note').innerText=notes[noteIndex];
       const path=docs.music.value?.path||'';
@@ -30,7 +48,7 @@
         if(same){audio.currentTime=time;if(playing)audio.play().catch(()=>{})}
         musicPath=path;musicExpires=Date.now()+45*60*1000;
       }else if(!path&&musicPath){audio.pause();audio.src=defaults.music;musicPath='';}
-      status('纪念日、便签与背景音乐 · 两人共享 · 每 2 分钟刷新');controls();
+      status(publicReady?'纪念日公开展示 · 便签与背景音乐两人共享 · 每 2 分钟刷新':'纪念日已公开展示；云端日期编辑待管理员完成配置。便签与音乐两人共享。');controls();
     }catch(e){if(token===epoch){ready=false;controls();status('共享设置同步失败：'+e.message)}}})();
     pending=run;try{await run}finally{if(pending===run)pending=null}
   }
@@ -42,15 +60,16 @@
     finally{if(token===epoch){busy=false;controls();await refresh()}}
   }
   el('settings').onclick=()=>{
-    if(!isCloud())return localSettings();if(!ready||busy){toast('请先成功同步共同设置');return}
-    editVersion=docs.anniversary.version;editEpoch=epoch;el('config').querySelector('[name=anniversary]').value=docs.anniversary.value||'';el('config').showModal();
+    if(!isCloud()){if(source?.session)el('cloud-toggle').click();else el('cloud-login').click();return}if(!ready||busy){toast('请先成功同步共同设置');return}
+    if(!publicReady){toast('纪念日云端编辑尚待管理员完成公开配置');return}
+    editVersion=docs.anniversary.version;editEpoch=epoch;el('config').querySelector('[name=anniversary]').value=docs.anniversary.value||publicAnniversary;el('config').showModal();
   };
   el('config-form').onsubmit=e=>{
-    if(!isCloud())return localAnniversary(e);e.preventDefault();const value=new FormData(e.target).get('anniversary');
+    e.preventDefault();if(!isCloud()||!publicReady)return;const value=new FormData(e.target).get('anniversary');
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return;
     return write('anniversary',value,editVersion,()=>el('config').close());
   };
-  el('share-anniversary').onclick=()=>{if(!state.anniversary||!ready)return;editEpoch=epoch;return write('anniversary',state.anniversary,docs.anniversary.version,()=>{})};
+  el('share-anniversary').onclick=()=>{if(!state.anniversary||!ready||!publicReady)return;editEpoch=epoch;return write('anniversary',state.anniversary,docs.anniversary.version,()=>{})};
   el('edit-notes').onclick=()=>{if(!ready||busy)return;editVersion=docs.notes.version;editEpoch=epoch;el('notes-text').value=notes.join('\n');el('notes-editor').showModal()};
   el('notes-form').onsubmit=e=>{e.preventDefault();const value=el('notes-text').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!value.length||value.length>50||value.some(s=>s.length>300)){toast('请填写 1–50 条便签，每条不超过 300 字');return}return write('notes',value,editVersion,()=>el('notes-editor').close())};
   el('audioFile').onchange=async e=>{
@@ -69,15 +88,16 @@
   };
   window.loveSettingsContext=next=>{
     const changed=!source||source.client!==next.client||source.mode!==next.mode||source.session?.user.id!==next.session?.user.id;source=next;
-    if(!changed)return;epoch++;ready=false;busy=false;pending=null;docs={};
+    if(!changed)return;epoch++;ready=false;busy=false;pending=null;publicPending=null;publicReady=false;docs={};
     el('config').close();el('notes-editor').close();
     if(isCloud()){store=window.createJournalStore(source.client,source.journalId);restore();refresh()}
-    else{store=null;restore();status('登录共同手账后，可共享纪念日、便签和背景音乐')}
+    else{store=null;restore();status('纪念日公开展示 · 登录后，两人共同编辑手账');refresh()}
     controls();
   };
   window.loveRefreshSettings=refresh;
+  window.loveRenderAnniversary=()=>applyAnniversary(publicAnniversary);
   window.loveSharedAnniversary=()=>isCloud()&&ready?(docs.anniversary.value||''):state.anniversary;
   setInterval(()=>{if(!document.hidden)refresh()},120000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
-  controls();
+  applyAnniversary(publicAnniversary);controls();
 })();

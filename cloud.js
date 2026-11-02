@@ -232,7 +232,7 @@
       const todoBackup=window.loveTodoBackup?await window.loveTodoBackup():{checks:state.checks,customTodos:state.customTodos};
       if(version!==epoch)throw Error('登录状态已改变，请重试');
       const url=URL.createObjectURL(new Blob([JSON.stringify({records,anniversary:window.loveSharedAnniversary?window.loveSharedAnniversary():state.anniversary,...todoBackup},null,2)],{type:'application/json'}));
-      const link=document.createElement('a');link.href=url;link.download='我们的小日子-云端备份.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('云端备份已导出（含照片）');
+      const link=document.createElement('a');link.href=url;link.download='与你岁岁年年-云端备份.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('云端备份已导出（含照片）');
     }catch(err){toast('导出失败：'+err.message);}finally{busy=false;}
   };
   el('import').onclick = () => {
