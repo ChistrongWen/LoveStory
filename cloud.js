@@ -88,7 +88,7 @@
       if (epoch !== version || !session) return;
       synced = true;
       cloudRows = data.map(r=>({...r,photo:r.photo_path?urls.get(r.photo_path):undefined,photos:r.photo_paths.map(p=>urls.get(p))}));
-      message('云端已同步 · ' + data.length + ' 条回忆 · ' + new Date().toLocaleTimeString() + '（每 30 秒自动刷新）');
+      message('云端已同步 · ' + data.length + ' 条回忆 · ' + new Date().toLocaleTimeString() + '（每 30 分钟自动刷新）');
       display();
     } catch(e) {
       if (epoch === version) { synced=false; cloudRows=[]; render(); message('同步失败：' + e.message + '。请刷新云端后重试。'); }
@@ -254,6 +254,6 @@
     if(session){mode='cloud';epoch++;display();await refresh();}
     else message('登录后可访问两人的共同手帐；当前为本机模式。');
   }).catch(err=>message('连接失败：'+err.message));
-  setInterval(()=>{if(!document.hidden && mode==='cloud')refresh();},30000);
+  setInterval(()=>{if(!document.hidden && mode==='cloud')refresh();},30 * 60 * 1000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && mode==='cloud')refresh();});
 })();
