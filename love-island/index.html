@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>爱情岛 · 与你岁岁年年</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #perf {
+      position: fixed; left: 8px; top: 8px; width: max-content; min-width: 250px; box-sizing: border-box; padding: 10px 12px;
+      font: 12px/1.35 system-ui, sans-serif; color: #e8f4ff; background: rgba(6, 10, 14, 0.6); border-radius: 8px;
+    }
+    #pGpu { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #pSpec { font-size: 11px; opacity: 0.6; }
+    .pRow { display: flex; align-items: baseline; gap: 4px; margin-top: 2px; }
+    #pFps { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .pRow > i { font-style: normal; font-weight: 700; color: #2cc9ff; }
+    .pRow > span { margin-left: auto; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+    #pMode { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #2cc9ff; }
+    #perf canvas { width: 100%; height: 24px; margin: 2px 0 8px; }
+    #perf button {
+      display: block; width: 100%; padding: 6px; border: 0; border-radius: 5px; cursor: pointer;
+      font: 600 12px system-ui, sans-serif; color: #071018; background: #2cc9ff;
+    }
+    #pUncap.on { color: #ebebeb; background: #424242; }
+    #perf #pBench { margin-top: 6px; color: #2cc9ff; background: none; box-shadow: inset 0 0 0 1px #2cc9ff; }
+    #pBench:disabled { opacity: 0.5; cursor: default; }
+    #hud { margin-top: 8px; font: 10px/1.35 ui-monospace, Consolas, monospace; white-space: pre; opacity: 0.75; }
+    #hud:empty { display: none; }
+    /* phones (class set by main.js): smaller, and down at the bottom, clear of the settings panel */
+    .mobile #perf { top: auto; bottom: 8px; min-width: 190px; padding: 8px 10px; font-size: 10px; }
+    .mobile #pFps { font-size: 26px; }
+    .mobile #hud { font-size: 8px; }
+  
+    #perf { display: none; }
+    .island-caption { position: fixed; z-index: 5; left: 28px; bottom: 28px; color: #fff9ee; text-shadow: 0 2px 15px #153d43; pointer-events: none; font-family: system-ui, sans-serif; }
+    .island-caption h1 { font: 36px Georgia, 'Songti SC', serif; letter-spacing: .15em; margin: 0 0 10px; }
+    .island-caption p { font-size: 13px; letter-spacing: .12em; margin: 8px 0; }
+    .island-caption a { pointer-events: auto; color: inherit; font-size: 12px; text-underline-offset: 4px; }
+    #loading { position: fixed; z-index: 20; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; background: #173e49; color: #fff9ee; font: 16px/2 system-ui, sans-serif; }
+    #loading[hidden] { display: none; }
+    #loading a { color: inherit; }
+    @media(max-width:600px) { .island-caption { left: 20px; bottom: 22px; } .island-caption h1 { font-size: 28px; } }
+  </style>
+  <script type="importmap">
+  {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/","lil-gui":"https://cdn.jsdelivr.net/npm/lil-gui@0.21.0/dist/lil-gui.esm.js"}}
+  </script>
+</head>
+<body>
+  <div id="perf">
+    <div id="pGpu"></div>
+    <div id="pSpec"></div>
+    <div class="pRow"><b id="pFps">–</b><i>FPS</i><span><em id="pMode">VSYNC</em><br><span id="pMs"></span></span></div>
+    <canvas id="pGraph" width="456" height="48"></canvas>
+    <button id="pUncap" type="button" title="Render frames back-to-back instead of once per display refresh, so the counter shows what this machine can do. The screen still updates at its own rate.">Uncap FPS</button>
+    <button id="pBench" type="button" title="Render 300 frames back-to-back with the scene paused and time them on the GPU. The screen freezes for about a second while it runs.">Run benchmark</button>
+    <div id="hud"></div>
+  </div>
+  <aside class="island-caption">
+    <h1>爱情岛</h1><p>和你一起，把时间交给海风。</p>
+    <p>拖动环顾 · 滚轮缩放 · 右上角切换风景</p>
+    <a href="../">返回我们的故事</a> · <a href="https://github.com/Humpalumps/Ultra-Water" target="_blank" rel="noopener noreferrer">Ultra-Water</a>
+  </aside>
+  <div id="loading" role="status"><div>正在驶向爱情岛…<br><small>第一次见面，海浪需要一点时间。</small></div></div>
+  <script type="module">
+    const loading = document.getElementById('loading');
+    try {
+      await import('./src/main.js');
+      loading.hidden = true;
+    } catch (error) {
+      console.error(error);
+      loading.innerHTML = '<div>海浪暂时未能加载。<br><small>请检查网络，并使用支持 WebGL2 的浏览器重试。</small><br><a href="">重新加载</a> · <a href="../">返回我们的故事</a></div>';
+    }
+  </script>
+</body>
+</html>
