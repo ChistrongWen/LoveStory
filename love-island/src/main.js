@@ -21,6 +21,8 @@ import { FLOATER_KINDS } from './scene/floaterMeshes.js';
 import { FloaterShadow } from './scene/floaterShadow.js';
 import { WaveCaustics } from './water/Caustics.js';
 
+import { createLoveIsland } from './scene/loveIsland.js';
+
 const REFLECT_LAYER = 1;
 
 const renderer = new THREE.WebGLRenderer({
@@ -71,6 +73,8 @@ const terrain = createTerrain({
   absorption: surface.uniforms.uAbsorption.value, reflectionLayer: REFLECT_LAYER,
 });
 scene.add(terrain.group);
+const loveIsland = createLoveIsland({ patchMaterial: terrain.patchProp, reflectionLayer: REFLECT_LAYER });
+scene.add(loveIsland.group);
 surface.uniforms.uRock.value.set(heroRock.x, heroRock.z, 8.5, 0);
 
 const sunLight = new THREE.DirectionalLight(0xffffff, Math.PI);
@@ -168,6 +172,16 @@ function setSun(elevation, azimuth) {
   applySun();
 }
 const views = {
+  '爱情岛 · 海边小院': () => {
+    setSun(38, 205);
+    camera.position.copy(loveIsland.camera);
+    controls.target.copy(loveIsland.target);
+  },
+  '爱情岛 · 我们的纪念': () => {
+    setSun(38, 205);
+    camera.position.copy(loveIsland.close);
+    controls.target.copy(loveIsland.coupleTarget);
+  },
   'Golden hour': () => {
     setSun(3.5, 205);
     const b = sunBearing(), c = coast(THREE.MathUtils.radToDeg(b) + 18);
@@ -233,7 +247,7 @@ let fSun = null;
 // --- GUI -----------------------------------------------------------------------
 const gui = new GUI({ title: '爱情岛 · 风景设置' });
 gui.close();   // on phones the open panel covers most of the screen
-const ui = { view: 'Lagoon', benchmark: () => benchButton.click(), exposure: 1 };
+const ui = { view: '爱情岛 · 海边小院', benchmark: () => benchButton.click(), exposure: 1 };
 gui.add(ui, 'view', Object.keys(views)).name('camera').onChange((v) => views[v]());
 gui.add(ui, 'benchmark').name('benchmark (uncapped)');
 
